@@ -1,0 +1,31 @@
+run_name: sac_hopper_v1
+
+env:
+  id: Hopper-v4
+  normalize: true         # critical for MuJoCo — normalize obs + rewards
+  wrappers:
+    - name: TimeLimit
+      kwargs:
+        max_episode_steps: 1000
+
+algorithm:
+  name: sac
+  policy: MlpPolicy
+  hyperparams:
+    learning_rate: 3.0e-4
+    buffer_size: 1_000_000
+    batch_size: 256
+    learning_starts: 10_000  # steps before first update — fills replay buffer
+    train_freq: 1
+    gradient_steps: 1
+    gamma: 0.99
+    tau: 0.005              # soft update coefficient for target network
+    ent_coef: auto          # auto-tune entropy — recommended for SAC
+    use_sde: false          # state-dependent exploration — try true for robotics
+
+training:
+  total_timesteps: 1_000_000
+  n_envs: 1               # SAC is off-policy — usually 1 env is fine
+  seed: 42
+  eval_freq: 10_000
+  n_eval_episodes: 10

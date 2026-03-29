@@ -1,0 +1,58 @@
+# ROMs (copyrighted material)
+roms/*.sfc
+roms/*.smc
+roms/*.rom
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Stable Baselines 3 / RL
+runs/
+tensorboard_logs/
+logs/
+checkpoints/
+models/
+*.zip
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Save states (can be large)
+*.state
+*.srm
+*.sav
+
+# Temporary files
+tmp/
+temp/
+*.tmp
