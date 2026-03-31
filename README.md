@@ -1,33 +1,32 @@
-# rl_project
+# Fire Emblem: Thracia 776 RL
 
-Stable-Baselines3 training package with best practices.
+Training an RL agent to play Fire Emblem: Thracia 776 (SNES) using Stable-Baselines3 and stable-retro.
 
 ## Setup
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Place your Thracia 776 ROM as `retro_data/FireEmblemThracia776-Snes-v0/rom.sfc`.
 
 ## Train
 
 ```bash
-# CartPole with PPO
-python train.py --config configs/ppo_cartpole.yaml
-
-# Hopper with SAC (requires MuJoCo)
-python train.py --config configs/sac_hopper.yaml
+python train.py --config configs/ppo_thracia776.yaml
 
 # Resume from checkpoint
-python train.py --config configs/ppo_cartpole.yaml --checkpoint checkpoints/ppo_cartpole_v1/best_model
+python train.py --config configs/ppo_thracia776.yaml --checkpoint checkpoints/ppo_thracia776_v1/best_model
 ```
 
 ## Evaluate
 
 ```bash
-python evaluate.py --model checkpoints/ppo_cartpole_v1/best_model \
-                   --env CartPole-v1 \
-                   --episodes 20 \
-                   --render
+python evaluate.py --model checkpoints/ppo_thracia776_v1/best_model \
+                   --env FireEmblemThracia776-Snes-v0 \
+                   --episodes 10
 ```
 
 ## Monitor training
@@ -39,26 +38,21 @@ tensorboard --logdir logs/
 ## Project structure
 
 ```
-rl_project/
 ├── train.py                  # entry point
 ├── evaluate.py               # eval / inference
 ├── callbacks.py              # EvalCallback + custom hooks
+├── test_retro.py             # smoke test for retro env
 ├── configs/
-│   ├── ppo_cartpole.yaml     # discrete action example
-│   └── sac_hopper.yaml       # continuous control example
+│   └── ppo_thracia776.yaml   # PPO + CnnPolicy for SNES
 ├── envs/
-│   └── wrappers.py           # env factory + composable wrappers
+│   └── wrappers.py           # env factory + retro wrappers
+├── retro_data/
+│   └── FireEmblemThracia776-Snes-v0/
+│       ├── data.json         # RAM variable definitions
+│       ├── scenario.json     # reward + done conditions
+│       ├── metadata.json     # default state
+│       ├── rom.sha           # ROM hash
+│       └── rom.sfc           # ROM (gitignored)
 ├── checkpoints/              # best_model.zip saved here
 └── logs/                     # tensorboard logs
 ```
-
-## Key decisions
-
-| Decision | Reason |
-|---|---|
-| Config-driven via YAML | Change hyperparams without touching code |
-| `make_vec_env` + `Monitor` | Required for episode stats + parallelism |
-| `VecNormalize` for continuous | Normalizing obs/rewards is critical for SAC/TD3 |
-| `EvalCallback` | Saves best model automatically, no manual checkpointing |
-| `deterministic=True` in eval | Stochastic policy at eval inflates variance |
-| `device="cuda"` | Falls back to CPU automatically — safe default |

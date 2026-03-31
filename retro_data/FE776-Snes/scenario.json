@@ -1,0 +1,8 @@
+{
+  "done": {
+    "condition": "never"
+  },
+  "reward": {
+    "variables": {}
+  }
+}

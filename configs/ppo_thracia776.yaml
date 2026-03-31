@@ -1,0 +1,48 @@
+run_name: ppo_thracia776_v1
+
+env:
+  id: FE776-Snes
+  normalize: false
+  frame_stack: 4
+
+  retro:
+    enabled: true
+    integration_path: retro_data
+    state: none           # no save state yet — boots to title screen
+    actions: all          # MultiBinary(12) — required for Discretizer
+
+  wrappers:
+    - name: StochasticFrameSkip
+      kwargs:
+        n: 4
+        stickprob: 0.25
+    - name: TimeLimit
+      kwargs:
+        max_episode_steps: 4500
+    - name: FEThracia776Discretizer
+    - name: WarpFrame
+      kwargs:
+        width: 84
+        height: 84
+
+algorithm:
+  name: ppo
+  policy: CnnPolicy
+  hyperparams:
+    learning_rate: 2.5e-4
+    n_steps: 128
+    batch_size: 32
+    n_epochs: 4
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_range: 0.1
+    ent_coef: 0.01        # entropy bonus — encourages exploration
+    vf_coef: 0.5
+    max_grad_norm: 0.5
+
+training:
+  total_timesteps: 1_000_000
+  n_envs: 4
+  seed: 42
+  eval_freq: 10_000
+  n_eval_episodes: 5

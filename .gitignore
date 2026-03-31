@@ -2,6 +2,12 @@
 roms/*.sfc
 roms/*.smc
 roms/*.rom
+rom/*.sfc
+rom/*.smc
+rom/*.rom
+retro_data/**/rom.sfc
+retro_data/**/rom.smc
+retro_data/**/*.state
 
 # Python
 __pycache__/

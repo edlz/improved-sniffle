@@ -7,3 +7,10 @@ tensorboard
 Pillow
 scikit-image
 PyYAML
+opencv-python-headless>=4.8.0
+tqdm
+rich
+pygame
+sounddevice
+jupyter
+matplotlib

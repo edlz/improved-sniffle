@@ -13,8 +13,7 @@ import yaml
 import gymnasium as gym
 from stable_baselines3 import PPO, SAC, TD3
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import VecNormalize
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv, VecFrameStack
 
 from callbacks import TrainingCallbacks
 from envs.wrappers import make_env
@@ -31,10 +30,16 @@ def train(config: dict, checkpoint: str | None = None):
     cfg = config
 
     # --- environment ---
+    retro_cfg = cfg["env"].get("retro")
+
+    # retro emulator allows only one instance per process — use SubprocVecEnv
+    vec_cls = SubprocVecEnv if retro_cfg and retro_cfg.get("enabled") else DummyVecEnv
+
     env = make_vec_env(
-        lambda: make_env(cfg["env"]["id"], cfg["env"].get("wrappers", [])),
+        lambda: make_env(cfg["env"]["id"], cfg["env"].get("wrappers", []), retro_cfg=retro_cfg),
         n_envs=cfg["training"]["n_envs"],
         seed=cfg["training"]["seed"],
+        vec_env_cls=vec_cls,
     )
 
     # normalize obs + rewards for continuous control tasks
@@ -46,7 +51,15 @@ def train(config: dict, checkpoint: str | None = None):
             clip_obs=10.0,
         )
 
-    eval_env = Monitor(gym.make(cfg["env"]["id"]))
+    # frame stacking at VecEnv level (memory efficient)
+    if cfg["env"].get("frame_stack"):
+        env = VecFrameStack(env, n_stack=cfg["env"]["frame_stack"])
+
+    eval_env = DummyVecEnv([
+        lambda: make_env(cfg["env"]["id"], cfg["env"].get("wrappers", []), retro_cfg=retro_cfg)
+    ])
+    if cfg["env"].get("frame_stack"):
+        eval_env = VecFrameStack(eval_env, n_stack=cfg["env"]["frame_stack"])
 
     # --- model ---
     algo_cls = ALGORITHMS[cfg["algorithm"]["name"]]
