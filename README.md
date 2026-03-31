@@ -10,7 +10,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Place your Thracia 776 ROM as `retro_data/FireEmblemThracia776-Snes-v0/rom.sfc`.
+Place your Thracia 776 ROM as `retro_data/FE776-Snes/rom.sfc`.
 
 ## Train
 
@@ -25,9 +25,11 @@ python train.py --config configs/ppo_thracia776.yaml --checkpoint checkpoints/pp
 
 ```bash
 python evaluate.py --model checkpoints/ppo_thracia776_v1/best_model \
-                   --env FireEmblemThracia776-Snes-v0 \
-                   --episodes 10
+                   --config configs/ppo_thracia776.yaml \
+                   --episodes 10 --render --audio
 ```
+
+Use keyboard to override the model during `--render` (arrows, Z=A, X=B, A=X, S=Y, Q=L, W=R, Enter=START).
 
 ## Monitor training
 
@@ -39,15 +41,14 @@ tensorboard --logdir logs/
 
 ```
 ├── train.py                  # entry point
-├── evaluate.py               # eval / inference
+├── evaluate.py               # eval / inference with pygame viewer
 ├── callbacks.py              # EvalCallback + custom hooks
-├── test_retro.py             # smoke test for retro env
 ├── configs/
 │   └── ppo_thracia776.yaml   # PPO + CnnPolicy for SNES
 ├── envs/
 │   └── wrappers.py           # env factory + retro wrappers
 ├── retro_data/
-│   └── FireEmblemThracia776-Snes-v0/
+│   └── FE776-Snes/
 │       ├── data.json         # RAM variable definitions
 │       ├── scenario.json     # reward + done conditions
 │       ├── metadata.json     # default state
