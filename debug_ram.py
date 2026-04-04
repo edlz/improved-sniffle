@@ -13,20 +13,24 @@ Controls:
     Tab         — SELECT
     F5          — save state
     F9          — load state
+    F6          — start/stop recording demo
     Q           — quit
 """
 
 from pathlib import Path
+import time
 import pygame
 import numpy as np
 import stable_retro
-from envs.wrappers import RewardWrapper
+from envs.wrappers import RewardWrapper, RAMObsWrapper
 
 stable_retro.data.add_custom_integration(str(Path("retro_data").resolve()))
 
 GAME = "FE776-Snes"
 STATE = "chapter1_start"
 SCALE = 3
+DEMO_DIR = Path("demos")
+DEMO_DIR.mkdir(exist_ok=True)
 
 raw_env = stable_retro.make(
     game=GAME,
@@ -38,6 +42,27 @@ raw_env = stable_retro.make(
 env = RewardWrapper(raw_env)
 env.reset()
 _, _, _, _, info = env.step(np.zeros(12, dtype=np.int8))
+
+# Use RAMObsWrapper's extract logic to build obs from info
+_ram_extractor = RAMObsWrapper.__new__(RAMObsWrapper)
+
+def extract_obs(info):
+    return _ram_extractor._extract(info)
+
+# Discrete action mapping: keyboard -> discrete action index
+# Matches FEThracia776DiscretizerSmall combos
+DISCRETE_MAP = {
+    frozenset():          0,  # NOOP
+    frozenset(["UP"]):    1,
+    frozenset(["DOWN"]):  2,
+    frozenset(["LEFT"]):  3,
+    frozenset(["RIGHT"]): 4,
+    frozenset(["A"]):     5,
+    frozenset(["B"]):     6,
+    frozenset(["R"]):     7,
+    frozenset(["SELECT"]): 8,
+    frozenset(["START"]): 9,
+}
 
 buttons = env.unwrapped.buttons
 
@@ -68,9 +93,12 @@ font = pygame.font.SysFont("monospace", 14)
 clock = pygame.time.Clock()
 
 prev_info = dict(info)
-change_log = []  # list of (frame_num, changes_str)
+change_log = []
 frame_num = 0
 running = True
+recording = False
+demo_obs = []
+demo_actions = []
 
 while running:
     for event in pygame.event.get():
@@ -84,6 +112,21 @@ while running:
                 with open(SAVE_PATH, "wb") as f:
                     f.write(gzip.compress(env.unwrapped.em.get_state()))
                 change_log.append(f"[{frame_num:>6}] *** SAVED to {SAVE_PATH} ***")
+            elif event.key == pygame.K_F6:
+                recording = not recording
+                if recording:
+                    demo_obs = []
+                    demo_actions = []
+                    change_log.append(f"[{frame_num:>6}] *** RECORDING STARTED ***")
+                else:
+                    if demo_obs:
+                        fname = DEMO_DIR / f"demo_{int(time.time())}.npz"
+                        np.savez(fname,
+                            obs=np.array(demo_obs),
+                            actions=np.array(demo_actions))
+                        change_log.append(f"[{frame_num:>6}] *** SAVED {len(demo_obs)} frames to {fname} ***")
+                    else:
+                        change_log.append(f"[{frame_num:>6}] *** RECORDING EMPTY — not saved ***")
             elif event.key == pygame.K_F9:
                 import gzip
                 try:
@@ -104,6 +147,13 @@ while running:
     prev_info = dict(info)
     obs, reward, terminated, truncated, info = env.step(action)
     frame_num += 1
+
+    # Record demo data
+    if recording:
+        pressed_set = frozenset(pressed)
+        discrete_action = DISCRETE_MAP.get(pressed_set, 0)
+        demo_obs.append(extract_obs(info))
+        demo_actions.append(discrete_action)
 
     if terminated or truncated:
         env.reset()
@@ -149,6 +199,7 @@ while running:
         f"turn={info.get('turn','?')}  phase={info.get('phase','?')}  "
         f"sel_char={info.get('selected_char','?')}  "
         f"pressed={','.join(pressed) or 'none'}"
+        f"{'  *** REC ***' if recording else ''}"
     )
     screen.blit(font.render(state_line, True, (200, 200, 200)), (8, y))
 
