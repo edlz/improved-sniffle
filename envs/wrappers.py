@@ -96,6 +96,9 @@ def _apply_wrapper(env: gym.Env, wrapper_cfg: dict) -> gym.Env:
         "StochasticFrameSkip": StochasticFrameSkip,
         "WarpFrame": WarpFrame,
         "FEThracia776Discretizer": FEThracia776Discretizer,
+        "FEThracia776DiscretizerSmall": FEThracia776DiscretizerSmall,
+        "RAMObsWrapper": RAMObsWrapper,
+        "RewardWrapper": RewardWrapper,
     }
 
     if name in custom:
@@ -181,7 +184,7 @@ class Discretizer(gym.ActionWrapper):
 
 
 class FEThracia776Discretizer(Discretizer):
-    """Discrete action set for Fire Emblem: Thracia 776."""
+    """Full discrete action set for Fire Emblem: Thracia 776."""
 
     def __init__(self, env):
         super().__init__(env, combos=[
@@ -197,8 +200,149 @@ class FEThracia776Discretizer(Discretizer):
             ["L"],               # Scroll left
             ["R"],               # Scroll right
             ["START"],           # Menu
-            ["A", "UP"],
-            ["A", "DOWN"],
-            ["A", "LEFT"],
-            ["A", "RIGHT"],
         ])
+
+
+class FEThracia776DiscretizerSmall(Discretizer):
+    """Trimmed action set for early training."""
+
+    def __init__(self, env):
+        super().__init__(env, combos=[
+            [],                  # 0: NOOP
+            ["UP"],              # 1: UP
+            ["DOWN"],            # 2: DOWN
+            ["LEFT"],            # 3: LEFT
+            ["RIGHT"],           # 4: RIGHT
+            ["A"],               # 5: Confirm / select
+            ["B"],               # 6: Cancel / back
+            ["R"],               # 7: Scroll right
+            ["START"],           # 8: Menu
+        ])
+
+
+class RAMObsWrapper(gym.Wrapper):
+    """Replace image obs with a flat vector of game state values from info."""
+
+    GAME_KEYS = [
+        "turn", "phase", "cursor_x", "cursor_y",
+        "gold", "last_defeated", "capture",
+    ]
+    UNIT_KEYS = ["char", "class", "x", "y", "level", "exp",
+                 "hp", "maxhp", "str", "mag", "skl", "spd", "def", "lck", "con"]
+    N_PLAYERS = 16
+    N_ENEMIES = 20
+
+    def __init__(self, env):
+        super().__init__(env)
+        n_features = (len(self.GAME_KEYS)
+                      + len(self.UNIT_KEYS) * self.N_PLAYERS
+                      + len(self.UNIT_KEYS) * self.N_ENEMIES)
+        self.observation_space = gym.spaces.Box(
+            low=0, high=65535, shape=(n_features,), dtype=np.float32,
+        )
+
+    def _extract(self, info):
+        feats = [float(info.get(k, 0)) for k in self.GAME_KEYS]
+        for prefix, n in [("p", self.N_PLAYERS), ("e", self.N_ENEMIES)]:
+            for i in range(n):
+                for k in self.UNIT_KEYS:
+                    feats.append(float(info.get(f"{prefix}{i}_{k}", 0)))
+        return np.array(feats, dtype=np.float32)
+
+    def reset(self, **kwargs):
+        self.env.reset(**kwargs)
+        # info is empty on reset — do a noop step to populate it
+        _, reward, terminated, truncated, info = self.env.step(0)
+        return self._extract(info), info
+
+    def step(self, action):
+        _, reward, terminated, truncated, info = self.env.step(action)
+        return self._extract(info), reward, terminated, truncated, info
+
+
+class RewardWrapper(gym.Wrapper):
+    """Shaped reward based on RAM info for Fire Emblem: Thracia 776."""
+
+    def __init__(self, env):
+        super().__init__(env)
+        self._prev_info = None
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        self._prev_info = None
+        return obs, info
+
+    def step(self, action):
+        obs, raw_reward, terminated, truncated, info = self.env.step(action)
+        reward = self._compute(self._prev_info, info) if self._prev_info else 0.0
+        self._prev_info = info
+        return obs, reward, terminated, truncated, info
+
+    def _compute(self, prev, cur):
+        if prev is None:
+            return 0.0
+        r = 0.0
+
+        # Penalize each new turn
+        # if cur.get("turn", 0) > prev.get("turn", 0):
+        #     r -= 1.0
+
+        # Player unit death — HP dropped to 0
+        for i in range(48):
+            if prev.get(f"p{i}_char", 0) == 0:
+                continue
+            if prev.get(f"p{i}_hp", 0) > 0 and cur.get(f"p{i}_hp", 0) == 0:
+                r -= 10.0
+
+        # Enemy unit death — HP dropped to 0
+        for i in range(51):
+            if prev.get(f"e{i}_char", 0) == 0:
+                continue
+            if prev.get(f"e{i}_hp", 0) > 0 and cur.get(f"e{i}_hp", 0) == 0:
+                r += 2.0
+
+        # Player HP damage taken
+        for i in range(48):
+            if prev.get(f"p{i}_char", 0) == 0:
+                continue
+            hp_prev = prev.get(f"p{i}_hp", 0)
+            hp_now = cur.get(f"p{i}_hp", 0)
+            if hp_now < hp_prev:
+                r -= (hp_prev - hp_now) * 0.05
+
+        # Enemy HP damage dealt
+        for i in range(51):
+            if prev.get(f"e{i}_char", 0) == 0:
+                continue
+            hp_prev = prev.get(f"e{i}_hp", 0)
+            hp_now = cur.get(f"e{i}_hp", 0)
+            if hp_now < hp_prev:
+                r += (hp_prev - hp_now) * 0.1
+
+        # Chapter clear
+        if cur.get("chapter", 0) > prev.get("chapter", 0):
+            r += 100.0
+
+        # Player unit movement
+        for i in range(48):
+            if cur.get(f"p{i}_char", 0) == 0:
+                continue
+            px, py = cur.get(f"p{i}_x", 0), cur.get(f"p{i}_y", 0)
+            ox, oy = prev.get(f"p{i}_x", 0), prev.get(f"p{i}_y", 0)
+            if px != ox or py != oy:
+                r += 0.6
+
+        # Player EXP gain
+        for i in range(48):
+            if cur.get(f"p{i}_char", 0) == 0:
+                continue
+            exp_now = cur.get(f"p{i}_exp", 0)
+            exp_prev = prev.get(f"p{i}_exp", 0)
+            if exp_now > exp_prev:
+                r += (exp_now - exp_prev) * 0.1
+
+        # Capture counter increased
+        if cur.get("capture", 0) > prev.get("capture", 0):
+            r += 5.0
+
+        return r

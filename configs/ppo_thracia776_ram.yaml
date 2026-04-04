@@ -1,0 +1,46 @@
+run_name: ppo_thracia776_ram_v1
+
+env:
+  id: FE776-Snes
+  normalize: false
+  # no frame_stack — not needed for RAM obs
+
+  retro:
+    enabled: true
+    integration_path: retro_data
+    state: debug_save
+    actions: all
+
+  wrappers:
+    - name: StochasticFrameSkip
+      kwargs:
+        n: 4
+        stickprob: 0.25
+    - name: TimeLimit
+      kwargs:
+        max_episode_steps: 4500
+    - name: FEThracia776DiscretizerSmall
+    - name: RewardWrapper
+    - name: RAMObsWrapper
+
+algorithm:
+  name: ppo
+  policy: MlpPolicy
+  hyperparams:
+    learning_rate: 3.0e-4
+    n_steps: 256
+    batch_size: 64
+    n_epochs: 10
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_range: 0.2
+    ent_coef: 0.05
+    vf_coef: 0.5
+    max_grad_norm: 0.5
+
+training:
+  total_timesteps: 10_000_000
+  n_envs: 2
+  seed: 42
+  eval_freq: 10_000
+  n_eval_episodes: 5

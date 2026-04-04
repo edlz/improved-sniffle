@@ -87,13 +87,18 @@ class PygameRenderer:
         self._game_w = w * scale
         self._game_h = h * scale
         self._input_h = 48 if button_combos else 0
+        self._log_h = 220
         self.screen = pygame.display.set_mode(
-            (self._game_w, self._game_h + self._input_h)
+            (self._game_w, self._game_h + self._input_h + self._log_h)
         )
         pygame.display.set_caption("Thracia 776 — RL Agent")
         self.clock = pygame.time.Clock()
         self._fps = retro_env.em.get_screen_rate()
         self._font = pygame.font.SysFont("monospace", 22)
+        self._log_font = pygame.font.SysFont("monospace", 14)
+        self._change_log = []
+        self._prev_info = {}
+        self._frame_num = 0
 
         self._key_map = {
             K.K_UP: "UP", K.K_DOWN: "DOWN", K.K_LEFT: "LEFT", K.K_RIGHT: "RIGHT",
@@ -116,10 +121,12 @@ class PygameRenderer:
         except Exception as e:
             print(f"Audio init failed ({e}), rendering video only")
 
-    def render_step(self, action=None):
+    def render_step(self, action=None, info=None, reward=0.0):
         for event in self.pygame.event.get():
             if event.type == self.pygame.QUIT:
                 return False
+
+        self._frame_num += 1
 
         frame = self.retro_env.get_screen()
         surf = self.pygame.surfarray.make_surface(frame.swapaxes(0, 1))
@@ -128,6 +135,9 @@ class PygameRenderer:
 
         if self._combos is not None and action is not None:
             self._draw_inputs(action)
+
+        # Draw RAM log
+        self._draw_log(info, reward)
 
         self.pygame.display.flip()
 
@@ -173,6 +183,58 @@ class PygameRenderer:
         )
         self.screen.blit(text_surf, (x + pad, y_center - th // 2))
         return tw + pad * 2
+
+    def _draw_log(self, info, reward):
+        if info is None:
+            return
+        y_start = self._game_h + self._input_h
+
+        # Background
+        self.pygame.draw.rect(self.screen, (20, 20, 20),
+            (0, y_start, self._game_w, self._log_h))
+
+        # Current state line
+        state_line = (
+            f"cursor=({info.get('cursor_x','?')},{info.get('cursor_y','?')})  "
+            f"turn={info.get('turn','?')}  phase={info.get('phase','?')}  "
+            f"sel={info.get('selected_char','?')}  "
+            f"p0=({info.get('p0_x','?')},{info.get('p0_y','?')}) hp={info.get('p0_hp','?')}"
+        )
+        self.screen.blit(self._log_font.render(state_line, True, (200, 200, 200)),
+            (8, y_start + 4))
+
+        # Track changes
+        changes = []
+        watch = ["selected_char", "phase", "cursor_x", "cursor_y", "turn", "capture"]
+        for i in range(5):
+            watch += [f"p{i}_x", f"p{i}_y", f"p{i}_hp"]
+        for i in range(15):
+            watch += [f"e{i}_x", f"e{i}_y", f"e{i}_hp"]
+        for k in watch:
+            old = self._prev_info.get(k)
+            new = info.get(k)
+            if old is not None and old != new:
+                changes.append(f"{k}:{old}->{new}")
+
+        if changes or reward != 0:
+            entry = f"[{self._frame_num:>6}] "
+            if reward != 0:
+                entry += f"r={reward:+.3f} "
+            entry += "  ".join(changes)
+            self._change_log.append((entry, reward != 0))
+            if len(self._change_log) > 50:
+                self._change_log.pop(0)
+
+        self._prev_info = dict(info)
+
+        # Draw scrolling log
+        self.screen.blit(self._log_font.render("--- change log ---", True, (150, 150, 150)),
+            (8, y_start + 22))
+        visible = self._change_log[-11:]
+        for i, (entry, has_reward) in enumerate(visible):
+            color = (100, 255, 100) if has_reward else (180, 180, 180)
+            self.screen.blit(self._log_font.render(entry[:100], True, color),
+                (8, y_start + 38 + i * 16))
 
     def _draw_inputs(self, action):
         y = self._game_h
@@ -240,12 +302,13 @@ def evaluate_with_config(model_path: str, config_path: str, episodes: int, rende
                 if human_action is not None:
                     action = np.array([human_action])
 
-            obs, reward_arr, done_arr, _ = venv.step(action)
+            obs, reward_arr, done_arr, info_arr = venv.step(action)
             done = done_arr[0]
             ep_reward += reward_arr[0]
             ep_len += 1
 
-            if renderer and not renderer.render_step(action[0]):
+            step_info = info_arr[0] if info_arr else {}
+            if renderer and not renderer.render_step(action[0], info=step_info, reward=reward_arr[0]):
                 done = True
 
         rewards.append(ep_reward)

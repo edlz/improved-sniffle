@@ -8,7 +8,7 @@ env:
   retro:
     enabled: true
     integration_path: retro_data
-    state: none           # no save state yet — boots to title screen
+    state: chapter1_start 
     actions: all          # MultiBinary(12) — required for Discretizer
 
   wrappers:
