@@ -216,7 +216,8 @@ class FEThracia776DiscretizerSmall(Discretizer):
             ["A"],               # 5: Confirm / select
             ["B"],               # 6: Cancel / back
             ["R"],               # 7: Scroll right
-            ["START"],           # 8: Menu
+            ["SELECT"],          # 8: Map / status
+            ["START"],           # 9: Menu
         ])
 
 
