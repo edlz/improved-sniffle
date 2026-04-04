@@ -12,7 +12,6 @@ from pathlib import Path
 import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit
-from stable_baselines3.common.monitor import Monitor
 
 
 def make_env(
@@ -32,6 +31,7 @@ def make_env(
     for w in (wrappers or []):
         env = _apply_wrapper(env, w)
 
+    from stable_baselines3.common.monitor import Monitor
     env = Monitor(env)  # must be outermost before VecEnv
     return env
 
@@ -74,6 +74,7 @@ def make_retro_env(
     for w in (wrappers or []):
         env = _apply_wrapper(env, w)
 
+    from stable_baselines3.common.monitor import Monitor
     env = Monitor(env)
     return env
 
@@ -216,8 +217,7 @@ class FEThracia776DiscretizerSmall(Discretizer):
             ["A"],               # 5: Confirm / select
             ["B"],               # 6: Cancel / back
             ["R"],               # 7: Scroll right
-            ["SELECT"],          # 8: Map / status
-            ["START"],           # 9: Menu
+            ["START"],           # 8: Menu
         ])
 
 
@@ -320,9 +320,13 @@ class RewardWrapper(gym.Wrapper):
             if hp_now < hp_prev:
                 r += (hp_prev - hp_now) * 0.1
 
+        # Phase change (L button removed from action set, so no exploit)
+        if cur.get("phase", 0) != prev.get("phase", 0):
+            r += 1.0
+
         # Chapter clear
         if cur.get("chapter", 0) > prev.get("chapter", 0):
-            r += 100.0
+            r += 1000.0
 
         # Player unit movement
         for i in range(48):

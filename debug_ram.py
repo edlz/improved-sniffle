@@ -27,7 +27,7 @@ from envs.wrappers import RewardWrapper, RAMObsWrapper
 stable_retro.data.add_custom_integration(str(Path("retro_data").resolve()))
 
 GAME = "FE776-Snes"
-STATE = "chapter1_start"
+STATE = "debug_save"
 SCALE = 3
 DEMO_DIR = Path("demos")
 DEMO_DIR.mkdir(exist_ok=True)
@@ -60,8 +60,7 @@ DISCRETE_MAP = {
     frozenset(["A"]):     5,
     frozenset(["B"]):     6,
     frozenset(["R"]):     7,
-    frozenset(["SELECT"]): 8,
-    frozenset(["START"]): 9,
+    frozenset(["START"]): 8,
 }
 
 buttons = env.unwrapped.buttons
@@ -73,12 +72,8 @@ KEY_MAP = {
     pygame.K_RIGHT: "RIGHT",
     pygame.K_z: "A",
     pygame.K_x: "B",
-    pygame.K_a: "X",
-    pygame.K_s: "Y",
-    pygame.K_d: "L",
     pygame.K_f: "R",
     pygame.K_RETURN: "START",
-    pygame.K_TAB: "SELECT",
 }
 
 SAVE_PATH = "checkpoints/debug_save.state"

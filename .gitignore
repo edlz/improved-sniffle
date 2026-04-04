@@ -58,6 +58,9 @@ build/
 *.srm
 *.sav
 
+# AWS
+.env.batch
+
 # Temporary files
 tmp/
 temp/

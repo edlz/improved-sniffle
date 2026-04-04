@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 import tyro
 
-from train_cleanrl import Agent
+from train import Agent
 
 
 @dataclass
@@ -33,7 +33,7 @@ class Args:
     """batch size"""
     hidden_size: int = 128
     """must match train_cleanrl.py"""
-    act_dim: int = 10
+    act_dim: int = 9
     """must match FEThracia776DiscretizerSmall"""
 
 
@@ -55,10 +55,23 @@ def load_demos(demo_dir):
 
     # Print action distribution
     unique, counts = np.unique(actions, return_counts=True)
-    names = ["NOOP", "UP", "DOWN", "LEFT", "RIGHT", "A", "B", "R", "SELECT", "START"]
+    names = ["NOOP", "UP", "DOWN", "LEFT", "RIGHT", "A", "B", "R", "START"]
     print("Action distribution:")
     for a, c in zip(unique, counts):
         print(f"  {names[a]:>6}: {c:6d} ({c/len(actions)*100:.1f}%)")
+
+    # Downsample NOOP — keep all action frames, cap NOOPs at 2x non-NOOP count
+    non_noop = actions != 0
+    n_action = non_noop.sum()
+    n_noop = (~non_noop).sum()
+    max_noop = int(n_action * 0.25)  # 4:1 action:NOOP ratio
+
+    if n_noop > max_noop:
+        noop_idx = np.where(~non_noop)[0]
+        keep_noop = np.random.choice(noop_idx, size=max_noop, replace=False)
+        keep = np.sort(np.concatenate([np.where(non_noop)[0], keep_noop]))
+        obs, actions = obs[keep], actions[keep]
+        print(f"Balanced: kept {max_noop}/{n_noop} NOOPs, {n_action} actions → {len(obs)} total")
 
     return obs, actions
 
